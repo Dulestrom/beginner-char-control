@@ -16,6 +16,7 @@ public class Player : MonoBehaviour
     Vector3 currentMovement;
     Vector3 currentRunMovement;
     Vector3 currentCrouchMovement;
+    Vector3 cameraRelativeMovement;
     Vector3 appliedMovement;
 
     bool isMoving;
@@ -25,14 +26,20 @@ public class Player : MonoBehaviour
     bool isJumping = false;
     bool isJumpPressed = false;
     bool isCrouchPressed;
+    bool isDashing;
+    bool isAttacking = false;
+    bool isAttackPressed;
 
-    float rotationFactorPerFrame = 15.0f;
+    int zero = 0;
+    int dashAttempts;
+    float rotationFactorPerFrame = 30.0f;
     float groundedGravity = -0.05f;
     float gravity = -9.8f;
     float initialJumpVelo;
     float maxJumpHeight = 1.0f;
     float maxJumpTime = 1.0f;
-
+    float dashStartTime;
+    float dashSpeed = 30f;
 
     private void Awake()
     {
@@ -52,6 +59,9 @@ public class Player : MonoBehaviour
         playerMovement.CharacterControls.Crouch.started += onCrouch;
         playerMovement.CharacterControls.Crouch.canceled += onCrouch;
         playerMovement.CharacterControls.Crouch.performed += onCrouch;
+        playerMovement.CharacterControls.Attack.started += onAttack;
+        playerMovement.CharacterControls.Attack.canceled += onAttack;
+        playerMovement.CharacterControls.Attack.performed += onAttack;
 
         setupJumpVariables();
     }
@@ -65,6 +75,24 @@ public class Player : MonoBehaviour
         float timeToApex = maxJumpTime / 2;
         gravity = (-2 * maxJumpHeight) / Mathf.Pow(timeToApex, 2);
         initialJumpVelo = (2 * maxJumpHeight) / timeToApex;
+    }
+
+    void onAttack(InputAction.CallbackContext context)
+    {
+        isAttackPressed = context.ReadValueAsButton();
+    }
+    void handleAttack()
+    {
+        if (isAttackPressed)
+        {
+            isAttacking = true;
+            animator.SetBool("isAttacking", true);
+        }
+        else
+        {
+            isAttacking = false;
+            animator.SetBool("isAttacking", false);
+        }
     }
 
     void onJump(InputAction.CallbackContext context)
@@ -112,9 +140,9 @@ public class Player : MonoBehaviour
     {
         Vector3 positionToLookAt;
 
-        positionToLookAt.x = currentMovement.x;
-        positionToLookAt.y = 0.0f;
-        positionToLookAt.z = currentMovement.z;
+        positionToLookAt.x = cameraRelativeMovement.x;
+        positionToLookAt.y = zero;
+        positionToLookAt.z = cameraRelativeMovement.z;
 
         Quaternion currentRotation = transform.rotation;
 
@@ -228,6 +256,7 @@ public class Player : MonoBehaviour
             animator.SetBool("isCrouchRunning", false);
         }
     }
+
     void Update()
     {
         handleRotation();
@@ -259,10 +288,33 @@ public class Player : MonoBehaviour
             appliedMovement.z = currentMovement.z;
         }
 
-        characterController.Move(appliedMovement * Time.deltaTime);
+        cameraRelativeMovement = ConvertToCameraSpace(appliedMovement);
+        characterController.Move(cameraRelativeMovement * Time.deltaTime);
 
         handleGravity();
         handleJump();
+        handleAttack();
+    }
+
+    Vector3 ConvertToCameraSpace(Vector3 vectorToRotate)
+    {
+        float currentYValue = vectorToRotate.y;
+
+        Vector3 cameraForward = Camera.main.transform.forward;
+        Vector3 cameraRight = Camera.main.transform.right;
+
+        cameraForward.y = 0;
+        cameraRight.y = 0;
+
+        cameraForward = cameraForward.normalized;
+        cameraRight = cameraRight.normalized;
+
+        Vector3 cameraForwardZProd = vectorToRotate.z * cameraForward;
+        Vector3 cameraRightXProd = vectorToRotate.x * cameraRight;
+
+        Vector3 vectorRotatedToCameraSpace = cameraForwardZProd + cameraRightXProd;
+        vectorRotatedToCameraSpace.y = currentYValue;
+        return vectorRotatedToCameraSpace;
     }
 
     private void OnEnable()
